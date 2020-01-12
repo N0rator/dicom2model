@@ -199,3 +199,6 @@ public/
 # End of https://www.gitignore.io/api/git,node,intellij+all
 
 package-lock.json
+
+# Builded project
+dist/
