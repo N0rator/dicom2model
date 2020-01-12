@@ -1,7 +1,6 @@
 import THREE from 'three';
-module.exports = renderByMC;
 
-function renderByMC(data: Array<number>, length: number, width: number, height: number) {
+export function renderByMC(data: Array<number>, length: number, width: number, height: number) {
 
     if(!arguments.length) throw new Error('No arguments');
     if(arguments.length !== 4) throw new Error('Not all of arguments');
