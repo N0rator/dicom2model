@@ -11,12 +11,6 @@ const port = process.env.PORT || 3000;
 
 const logsDir = __dirname + '\\logs';
 const logger = new Logger(true, true, logsDir);
-
-// var app = require('express')();
-// var http = require('http').Server(app);
-// var io = require('socket.io')(http);
-// var port = process.env.PORT || 3000;
-
 logger.info('App started.');
 
 app.get('/', (req: express.Request, res: express.Response) => {
@@ -26,12 +20,11 @@ app.get('/', (req: express.Request, res: express.Response) => {
 io.on('connection', function(socket: socketIo.Socket){
     logger.info('user ' + socket.id + ' connected');
 
-    socket.on('chat message', function(msg: any){
-        console.log('New Message: ' + msg);
-        io.emit('chat message', msg);
-    });
+    socket.on('start uploading', uploadingHandler);
 
-    socket.on('start uploading', (filesInfo: Array<any>)=>{
+    socket.on('send coefficients', sendCoefficientsHandler)
+
+    function uploadingHandler(filesInfo: Array<{name: string, size: number}>) {
         logger.info('user ' + socket.id + ' start upload ' + filesInfo.length + ' files.');
 
         let filesDirectory = __dirname + '/files';
@@ -76,11 +69,38 @@ io.on('connection', function(socket: socketIo.Socket){
                 socket.emit('end uploading', {result: 'success'});
             }
         }
-    });
+    }
+
+    function sendCoefficientsHandler(coefficients: {min: number, max: number}){
+        logger.info('Received a coefficients from user ' + socket.id);
+
+        // Checking for user's files existence
+        let userFiles = getUserFiles(socket.id);
+        if(!userFiles.length) {
+            logger.error('Didn\'t found files of "' + socket.id + '" user.');
+            socket.emit('result coefficients', {status: 'error', error: 'Didn\'t found files of "' + socket.id + '" user'});
+        } else {
+            logger.info('Found ' + userFiles.length + ' files of "' + socket.id + '" user.');
+        }
+
+        //TODO add functionality to start building model.
+
+        function getUserFiles(user: string) : Array<string> {
+            let userFilesDir = __dirname + '/files/' + user;
+
+            if (!fs.existsSync(userFilesDir) ||
+                (fs.existsSync(userFilesDir) && fs.readdirSync(userFilesDir).length)){
+                return [];
+            }
+            else{
+                return fs.readdirSync(userFilesDir);
+            }
+        }
+    }
 });
 
 
 
 server.listen(port, function(){
-    logger.info('listening on *:' + port);
+    logger.info('Listening on *:' + port);
 });
