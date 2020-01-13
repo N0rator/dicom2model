@@ -33,3 +33,9 @@ code {
     float: left;
     overflow: hidden;
 }
+
+.connected-status-badge {
+    font-size: 10px;
+    float: right;
+    margin-top: 15px;
+}

@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-export class Logger {
+export default class Logger {
     private _console: boolean;
     private _file: boolean;
     private _logPath: string;
@@ -9,7 +9,7 @@ export class Logger {
      * @description Creates Logger object witch uses for logging error, debug or info messages
      * @param console {boolean} true - messages will be written into console, false - messages will not be written into console
      * @param file {boolean} true - messages will be written into .log file, false - messages will not be written into .log file
-     * @param path {string} path to directory will containing .log files. Default: '"logger.ts directory"/logs'
+     * @param path {string} path to directory will containing .log files. Default: '"Logger.ts directory"/logs'
      */
     constructor(console: boolean | false, file: boolean | false, path?: string){
         this._console = console;
