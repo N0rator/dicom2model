@@ -7,6 +7,8 @@ import User from "../models/User.model";
 import SocketLogger from "../shared/SocketLogger.service";
 import IndexGenerator from "../shared/IndexGenerator.service";
 import {LogMessageTypes} from "../models/LogMessageTypes.enum";
+import IndexedFile from "../models/IndexedFile.model";
+import UserData from "../models/UserData.model";
 
 const app = express();
 const server = new http.Server(app);
@@ -14,48 +16,51 @@ const io = socketIo(server);
 const port = process.env.PORT || 3000;
 
 const serverLogger = new ServerLogger();
+const FILES_ROOT_DIRECTORY = __dirname + '\\user_files';
+
 serverLogger.info('app started');
 
 let users: User[] = [];
 
 io.on('connection', (socket: socketIo.Socket) => {
-    let socketLogger = new SocketLogger(socket);
-    let user = {
+    let user: User = {
+        id: IndexGenerator.getIndex(),
         connection: socket,
-        logger: socketLogger,
-        id: IndexGenerator.getIndex()
     };
     users.push(user);
+    let socketLogger = new SocketLogger(user);
     socketLogger.log('connection established', LogMessageTypes.INFO);
 
     /**
      * Data object that's used for storing data from user
      */
-    let data: {
-        filesInfo?: any,
-        files: File[],
-    } = {
+    let data: UserData = {
         filesInfo: {},
-        files: []
+        indexedFiles: []
     };
 
     /**
      * Resets data from user, sets new data.filesInfo
      */
-    socket.on('sendBlob.blobInfo', blobInfo => {
-        socketLogger.log(`sendBlob.blobInfo:`, LogMessageTypes.INFO);
+    socket.on('sendBlob.blobInfo', (blobInfo: UserData) => {
+        socketLogger.log(`sendBlob.blobInfo`, LogMessageTypes.INFO);
         socketLogger.logObject(blobInfo, LogMessageTypes.INFO);
-        data = {filesInfo: blobInfo, files: []};
+        ({...data.filesInfo} = blobInfo);
     });
 
     /**
      * Saves received file to data.files
      */
-    socket.on('sendBlob.file', (fileBlob: File) => {
-        data.files.push(fileBlob);
-        socketLogger.log(`sendBlob.file got fileBlob #${data.files.length}`)
-        if (data.files.length === data.filesInfo.size) {
-            onFilesLoad(data.files, user.id);
+    socket.on('sendBlob.file', (indexedFile: IndexedFile) => {
+        data.indexedFiles.push(indexedFile);
+        socketLogger.log(`sendBlob.file got indexedFile {index: ${indexedFile.index}, filename: ${indexedFile.filename}, blob}`)
+        if (data.indexedFiles.length === data.filesInfo.size) {
+            socketLogger.log(`got all ${data.indexedFiles.length} files, executing onFilesLoad()..`, LogMessageTypes.INFO);
+            try {
+                onFilesLoad(data.indexedFiles, user.id);
+            } catch (e) {
+                // TODO handle bad execution
+            }
         }
     });
 
@@ -64,23 +69,33 @@ io.on('connection', (socket: socketIo.Socket) => {
     });
 });
 
-let onFilesLoad = (files: any[], userId: number) => {
-    let filesDirectory = __dirname + '/files';
-    let userFilesDir = filesDirectory + '/' + userId;
+/**
+ * Creates root user files directory if it doesn't exist
+ */
+let createLogDirectory = () => {
+    let filesDirectory = FILES_ROOT_DIRECTORY;
     if (!fs.existsSync(filesDirectory)) {
-        serverLogger.info('creating directory for files');
+        serverLogger.info(`creating root files directory {dirName: ${filesDirectory}}`);
         fs.mkdirSync(filesDirectory);
     }
-    if (!fs.existsSync(userFilesDir)) {
-        serverLogger.info('creating directory for user ' + userId);
-        fs.mkdirSync(userFilesDir);
+}
+
+let onFilesLoad = (indexedFiles: IndexedFile[], userId: number) => {
+    let userFilesDirectory = FILES_ROOT_DIRECTORY + '/' + userId;
+
+    createLogDirectory();
+
+    if (!fs.existsSync(userFilesDirectory)) {
+        serverLogger.info(`creating directory for user {userId: ${userId}`);
+        fs.mkdirSync(userFilesDirectory);
     }
 
-    let fileIndex = 0;
-    files.forEach(file => {
-        fs.writeFile(userFilesDir + '/' + fileIndex++, Buffer.from(file), (error) => {
+    indexedFiles.forEach(indexedFile => {
+        fs.writeFile(userFilesDirectory + '\\' + `${indexedFile.index}#${indexedFile.filename}`, Buffer.from(indexedFile.blob), (error) => {
             if (error) {
-                serverLogger.error('failed to save file "' + fileIndex + '"');
+                let errorMessage = `Unable to save file {index: ${indexedFile.index}, filename: ${indexedFile.filename}, userId: ${userId}`;
+                serverLogger.error(errorMessage);
+                throw Error(errorMessage);
             }
         });
     })
