@@ -1,6 +1,6 @@
 import io from 'socket.io-client';
 import React, {useState} from 'react';
-import {Badge, Button, Card, Container, Form, OverlayTrigger, Popover, Table} from "react-bootstrap";
+import {Badge, Button, Card, Container, Form, Table} from "react-bootstrap";
 import FileInput from "./file-input.component";
 import ImageRow from "./image-row.component";
 
