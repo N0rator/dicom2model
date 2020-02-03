@@ -10,10 +10,13 @@ export default function FileInput(props: {
 
     let selectFile = () => document.getElementById(fileSelectorId).click();
 
-    let handleFileSelection = (event) => props.onFilesSelection(event.target.files);
+    let handleFileSelection = (event) => {
+        props.onFilesSelection(event.target.files);
+    }
+
 
     return (<>
         <Button onClick={selectFile}>Select Files</Button>
-        <input className={'file-input-tag'} type={'file'} id={`${fileSelectorId}`} onChange={handleFileSelection} multiple={true}/>
+        <input className={'file-input-tag'} type={'file'} id={`${fileSelectorId}`} onChange={handleFileSelection} multiple />
     </>);
 }
