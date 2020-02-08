@@ -39,3 +39,8 @@ code {
     float: right;
     margin-top: 15px;
 }
+
+#model-viewer-canvas {
+    width: 100%;
+    height: 100%;
+}

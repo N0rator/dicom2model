@@ -86,14 +86,14 @@ let onFilesLoad = (indexedFiles: IndexedFile[], userId: number) => {
     createLogDirectory();
 
     if (!fs.existsSync(userFilesDirectory)) {
-        serverLogger.info(`creating directory for user {userId: ${userId}`);
+        serverLogger.info(`creating directory for user {userId: ${userId}}`);
         fs.mkdirSync(userFilesDirectory);
     }
 
     indexedFiles.forEach(indexedFile => {
         fs.writeFile(userFilesDirectory + '\\' + `${indexedFile.index}#${indexedFile.filename}`, Buffer.from(indexedFile.blob), (error) => {
             if (error) {
-                let errorMessage = `Unable to save file {index: ${indexedFile.index}, filename: ${indexedFile.filename}, userId: ${userId}`;
+                let errorMessage = `Unable to save file {index: ${indexedFile.index}, filename: ${indexedFile.filename}, userId: ${userId}}`;
                 serverLogger.error(errorMessage);
                 throw Error(errorMessage);
             }
