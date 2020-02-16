@@ -1,7 +1,11 @@
 import * as THREE from 'three';
-import {Coordinates} from "../models/coords.model";
+import {Coords} from "../models/coords.model";
+import {BufferFigure} from "../models/buffer-figure.model";
+import {Figures} from "./figures.util";
 
 export default class ModelGenerator {
+    private figures: Figures = new Figures();
+
     /**
      * Processes modelSource by following steps:
      * 1. Goes through each position of modelSource, collects state (is it model or void) at that position;
@@ -10,24 +14,37 @@ export default class ModelGenerator {
      * @param modelSource               data source, e.g. array of images
      * @param retrievePositionState     function to retrieve position state from model source
      * @param modelGeometry             THREE.js geometry where vertices and normals would be pushed to
-     * @param dimensions                field describing modelSourceDimensions
+     * @param modelDimensions           field describing modelSourceDimensions
      */
-    // TODO implement model building via setIntervals so it would model building progress would be observable
-    // TODO implement 'turbo-mode' option with no UI updates so model builds faster; probably can be on backend
+    // TODO implement model building via setIntervals so model building progress would be observable
+    // TODO implement 'turbo-mode' option with no UI updates to make model build faster; probably can be on backend
     processModel = (
         modelSource: any[],
-        retrievePositionState: (position: Coordinates) => 0 | 1,
+        retrievePositionState: (position: Coords, source: any) => 0 | 1,
         modelGeometry: THREE.BufferGeometry,
-        dimensions?: Coordinates,
+        modelDimensions: Coords = this.getModelDimensions(modelSource),
     ) => {
-        const modelDimensions: Coordinates = dimensions || this.getModelDimensions(modelSource);
+        let timeNow = Date.now();
+        let modelVertices: number[] = [];
+        let modelNormals: number[] = [];
         for (let x = 0; x < modelDimensions.x - 1; x++)
-            for (let y = 0; x < modelDimensions.y - 1; y++)
-                for (let z = 0; x < modelDimensions.z - 1; z++) {
+            for (let y = 0; y < modelDimensions.y - 1; y++)
+                for (let z = 0; z < modelDimensions.z - 1; z++) {
                     let positionStateAsBinaryString: string = this.getPositionState({x, y, z}, modelSource, retrievePositionState);
-                    let figureToUse = this.figures[positionStateAsBinaryString];
-                    this.pushFigure(figureToUse, modelGeometry);
+                    let figureToUse: BufferFigure = this.figures.getFigure(positionStateAsBinaryString);
+                    if (figureToUse.getVertices().length === 0) continue;
+                    let figureVertices = [...figureToUse.getVertices()];
+                    // TODO transform via transformation matrix4
+                    for (let pointIndex = 0; pointIndex < figureVertices.length; pointIndex += 3) {
+                        figureVertices[pointIndex] += x;
+                        figureVertices[pointIndex + 1] += y;
+                        figureVertices[pointIndex + 2] += z;
+                    }
+                    modelVertices.push(...figureVertices);
+                    modelNormals.push(...figureToUse.getNormals());
+                    this.updateGeometry(modelVertices, modelNormals, modelGeometry);
                 }
+        console.log(`Model generation finished (${Date.now() - timeNow}) ms`);
     };
 
     /**
@@ -35,45 +52,45 @@ export default class ModelGenerator {
      * each number represents cube's vertices in following order:
      *  4 — — — 5
      *  | \     | \
-     *  |   7 — — — 6      Z
+     *  |   7 — — — 6      Y (4)
      *  |   |   |   |      |
-     *  0 — | — 1   |      — — —> X
+     *  0 — | — 1   |      — — —> X (1)
      *    \ |     \ |      \
-     *      3 — — — 2       Y
+     *      3 — — — 2       Z (3)
      * @param position                coordinates for retrieving info from source
      * @param source                  array of images or data
      * @param retrievePositionState   function to retrieve position state (0 or 1) from source
-     * @returns {string}  8-length binary string, e.g. '00101100' means that 2nd,
-     * 4th and 5th vertices are inside the model.
+     * @returns {string}              8-length binary string, e.g. '00101101' means that 0, 2nd, 3th and 5th vertices
+     * are inside the model.
      */
     getPositionState = (
-        position: Coordinates,
+        position: Coords,
         source: any[],
-        retrievePositionState: (position: Coordinates) => 0 | 1,
+        retrievePositionState: (position: Coords, source: any) => 0 | 1,
     ): string => {
         let binaryString = '';
-        binaryString += retrievePositionState(position);
-        binaryString += retrievePositionState({...position, x: position.x + 1});
-        binaryString += retrievePositionState({...position, x: position.x + 1, y: position.y + 1});
-        binaryString += retrievePositionState({...position, y: position.y + 1});
-        binaryString += retrievePositionState({...position, z: position.z + 1});
-        binaryString += retrievePositionState({...position, z: position.z + 1, x: position.x + 1});
-        binaryString += retrievePositionState({...position, z: position.z + 1, x: position.x + 1, y: position.y + 1});
-        binaryString += retrievePositionState({...position, z: position.z + 1, y: position.y + 1});
+        binaryString += retrievePositionState({...position, z: position.z + 1, y: position.y + 1}, source);
+        binaryString += retrievePositionState({z: position.z + 1, x: position.x + 1, y: position.y + 1}, source);
+        binaryString += retrievePositionState({...position, y: position.y + 1, x: position.x + 1}, source);
+        binaryString += retrievePositionState({...position, y: position.y + 1}, source);
+        binaryString += retrievePositionState({...position, z: position.z + 1}, source);
+        binaryString += retrievePositionState({...position, x: position.x + 1, z: position.z + 1}, source);
+        binaryString += retrievePositionState({...position, x: position.x + 1}, source);
+        binaryString += retrievePositionState(position, source);
         return binaryString;
     };
 
     /**
      * Extracts model dimensions as if it is 3-dimension array.
      */
-    getModelDimensions = (modelSource: any[][][]): Coordinates => {
-        let coords: Coordinates = {x: 0, y: 0, z: 0};
+    getModelDimensions = (modelSource: any[][][]): Coords => {
+        let coords: Coords = {x: 0, y: 0, z: 0};
         if (Array.isArray(modelSource)) {
             coords.z = modelSource.length;
             if (Array.isArray(modelSource[0])) {
                 coords.x = modelSource[0].length;
                 if (Array.isArray(modelSource[0][0])) {
-                    coords.z = modelSource[0][0].length
+                    coords.y = modelSource[0][0].length
                 }
             }
         }
@@ -81,31 +98,40 @@ export default class ModelGenerator {
     };
 
     /**
-     * Generates random triangle within radius of 5 units around given position and pushes vertices & normals to
+     * Generates random triangle within radius of 1 unit around given position and pushes vertices & normals to
      * destination data arrays. Function for debugging purposes.
      */
-    processTriangle = (position: { x, y, z }, destVerticesArray: any, destNormalsArray: any) => {
+    processRandomTriangle = (position: { x, y, z }, destVerticesArray: number[], destNormalsArray: number[]) => {
         const {x, y, z} = position;
         let randValue = () => Math.random() * 2 - 1;
+        const triangle: BufferFigure = ModelGenerator.createTriangle([
+            {x: x + randValue(), y: y + randValue(), z: z + randValue()},
+            {x: x + randValue(), y: y + randValue(), z: z + randValue()},
+            {x: x + randValue(), y: y + randValue(), z: z + randValue()}
+        ]);
+        destVerticesArray.push(...triangle.getVertices());
+        destNormalsArray.push(...triangle.getNormals());
+    };
 
+    /**
+     * Generates triangles from a given coordinates points.
+     * From 3 points provided (a, b, c), normal is calculated from multiplying vectors ab and cb
+     * @param coords    array with 3 coordinates for each triangle
+     * @returns         array of 18 elements -- 9 vertices and 9 normals coords
+     */
+    static createTriangle = (coords: Coords[]): BufferFigure => {
         // 1st vertex
-        const ax = x + randValue();
-        const ay = y + randValue();
-        const az = z + randValue();
-
+        const ax = coords[0].x;
+        const ay = coords[0].y;
+        const az = coords[0].z;
         // 2nd vertex
-        const bx = x + randValue();
-        const by = y + randValue();
-        const bz = z + randValue();
-
+        const bx = coords[1].x;
+        const by = coords[1].y;
+        const bz = coords[1].z;
         // 3d vertex
-        const cx = x + randValue();
-        const cy = y + randValue();
-        const cz = z + randValue();
-
-        destVerticesArray.push(ax, ay, az);
-        destVerticesArray.push(bx, by, bz);
-        destVerticesArray.push(cx, cy, cz);
+        const cx = coords[2].x;
+        const cy = coords[2].y;
+        const cz = coords[2].z;
 
         // point vectors
         const pA = new THREE.Vector3(ax, ay, az);
@@ -115,8 +141,8 @@ export default class ModelGenerator {
         // sub-vectors used for retrieving normals
         const cb = new THREE.Vector3();
         const ab = new THREE.Vector3();
-        cb.subVectors(pC, pB);
         ab.subVectors(pA, pB);
+        cb.subVectors(pC, pB);
         cb.cross(ab);
         cb.normalize();
 
@@ -125,32 +151,18 @@ export default class ModelGenerator {
         const ny = cb.y;
         const nz = cb.z;
 
-        destNormalsArray.push(nx, ny, nz);
-        destNormalsArray.push(nx, ny, nz);
-        destNormalsArray.push(nx, ny, nz);
-    };
+        return new BufferFigure([ax, ay, az, bx, by, bz, cx, cy, cz,
+            nx, ny, nz, nx, ny, nz, nx, ny, nz]);
+    }
 
     /**
      * Pushes array of vertices & normals from figure to destination arrayOfVertices & arrayOfNormals.
      */
-    pushFigure = (figure: { vertices: number[], normals: number[] }, modelGeometry: THREE.BufferGeometry) => {
-        modelGeometry.setAttribute('position', new THREE.Float32BufferAttribute(figure.vertices, 3)
-            .onUpload(function () {
-                this.array = null;
-            }));
-        modelGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(figure.normals, 3)
-            .onUpload(function () {
-                this.array = null;
-            }));
-    };
-
-    /**
-     * TODO eh that's a lot of work
-     */
-    private readonly figures = {
-        '00000000': {},
-        '00000001': {vertices: [], normals: []},
-        '00000010': {vertices: [], normals: []},
+    updateGeometry = (newVertices: number[], newNormals: number[], modelGeometry: THREE.BufferGeometry) => {
+        modelGeometry.setAttribute('position', new THREE.Float32BufferAttribute(newVertices, 3)
+            .onUpload(function () { this.array = null }));
+        modelGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(newNormals, 3)
+            .onUpload(function () { this.array = null }));
     };
 
     /**
