@@ -3,6 +3,7 @@ import React, {useState} from 'react';
 import {Badge, Button, Card, Container, Form, Table} from "react-bootstrap";
 import FileInput from "./file-input.component";
 import ImageRow from "./image-row.component";
+import ModelViewer from "./model-viewer.component";
 
 let socketConnection = io('http://localhost:3000');
 
@@ -49,7 +50,7 @@ export default function MainPage() {
                     </Badge>
                 </Card.Body>
             </Card>
-            <Card>
+            <Card className={'mb-10'}>
                 <Card.Body>
                     <Form> {/* files form */}
                         <Form.Group controlId="filesForm.ControlFiles">
@@ -73,6 +74,14 @@ export default function MainPage() {
                             Submit Files
                         </Button>
                     </Form>
+                </Card.Body>
+            </Card>
+            <Card>
+                <Card.Body>
+                    <Card.Title>Preview Model</Card.Title>
+                    <Card.Text>
+                        <ModelViewer/>
+                    </Card.Text>
                 </Card.Body>
             </Card>
         </Container>
